@@ -1,0 +1,142 @@
+// Testing project main.go
+package main
+
+import (
+	"fmt"
+	"html/template"
+    "io"
+    "net/http"
+	"encoding/json"
+    "encoding/csv"
+	"mime/multipart"
+    "os"
+	"github.com/gorilla/mux"
+)
+var recipe []struct {
+    Name string `json:"name"`
+    Ingredients []struct{
+		Item string `json:"item"`
+		Amount string `json:"amount"`
+		Unit string `json:"unit"`
+	} `json:"ingredients"`
+}
+
+type fridgeRecord struct {
+         Item string
+         Amount  string
+		 Unit string
+		Useby string 
+ }
+
+
+
+func parseCsvFile(csvfile multipart.File)([]fridgeRecord, error){
+	
+	reader := csv.NewReader(csvfile)
+
+         reader.FieldsPerRecord = -1
+
+         rawCSVdata, err := reader.ReadAll()
+
+         if err != nil {
+                 fmt.Println(err)
+                 return nil, err
+         }
+
+         // sanity check, display to standard output
+         for _, each := range rawCSVdata {
+                 fmt.Printf("email : %s and timestamp : %s\n", each[0], each[1])
+         }
+
+         // now, safe to move raw CSV data to struct
+
+         var oneRecord fridgeRecord
+
+         var allRecords []fridgeRecord
+
+         for _, each := range rawCSVdata {
+                 oneRecord.Item = each[0]
+                 oneRecord.Amount = each[1]
+				oneRecord.Unit = each[2]
+				  oneRecord.Useby = each[3]
+                 allRecords = append(allRecords, oneRecord)
+         }
+		
+		return allRecords, nil
+	
+}
+
+func HomeHandler(w http.ResponseWriter, r *http.Request) {
+	
+	 if r.Method == "GET" {
+        t, _ := template.ParseFiles("layout/main.gtpl")
+        t.Execute(w, nil)
+    } else {
+       file, err := UplHandler(w,r, "jsonfile")
+	   
+	if file != nil{
+		jsonParser := json.NewDecoder(file)
+		if err = jsonParser.Decode(&recipe); err != nil {
+        fmt.Println( err.Error())
+		}
+		
+		
+		if len(recipe) > 0{
+		fmt.Printf("return Name is %s and ingred is %s", recipe[0].Name, recipe[0].Ingredients[0].Item)
+		}
+		file2, err := UplHandler(w,r, "csvfile")
+		if file2 != nil{
+		csv, err := parseCsvFile(file2)
+		fmt.Printf("CSV is %s ", file)
+		
+		if(len(csv) > 0 && err == nil){
+			w.Write([]byte("VALUE IS "))
+			fmt.Printf("return Name is %s and ingred is %s", csv[0].Amount, csv[0].Item)
+		}
+		}
+		if(err != nil){
+			//w.Write([]byte(err.Error()))
+			fmt.Printf("return Name is %s ", err.Error())
+		}
+		
+	}
+	
+	
+		//r.ParseForm()
+        // logic part of log in
+        //fmt.Println("username:", r.Form["username"])
+        //fmt.Println("password:", r.Form["password"])
+    }
+        // w.Write([]byte("Hello, World!"))
+ }
+
+
+func UplHandler(w http.ResponseWriter, r *http.Request, n string)(multipart.File, error) {
+    
+        r.ParseMultipartForm(32 << 20)
+        file, handler, err := r.FormFile(n)
+        
+		if err != nil {
+            fmt.Println(err)
+            return nil, err
+        }
+		
+		defer file.Close()
+        fmt.Fprintf(w, "%v", handler.Header)
+        f, err := os.OpenFile("./upload/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+        if err != nil {
+            fmt.Println(err)
+            return nil, err
+        }
+        defer f.Close()
+        io.Copy(f, file)
+		return file, nil   
+}
+
+
+func main() {
+	fmt.Println("Hello World! started")
+	r := mux.NewRouter()
+	r.HandleFunc("/",HomeHandler)
+	http.ListenAndServe(":8800", r)
+}
