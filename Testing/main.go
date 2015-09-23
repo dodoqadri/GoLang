@@ -80,7 +80,12 @@ func TextStr(csv []fridgeRecord) string {
 		fmt.Printf(" counts %s and rCount %d \n", fCount.Name, fCount.IngredientCount)
 		fmt.Printf(" rcounts %s and rCount %d \n", rCount.Name, rCount.IngredientCount)
 	}
+	if len(fCount.Name) > 3{
 	return fCount.Name
+	}else{
+		return "Order Takeout";
+	}
+	
 }
 
 func parseCsvFile(csvfile multipart.File) ([]fridgeRecord, error) {
